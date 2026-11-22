@@ -140,6 +140,7 @@ car.userData.driverEye=new THREE.Vector3(-.40,1.085,.23);car.userData.driverTarg
 return car;
 }
 export function animateCar(car,{wheel=0,steer=0,brake=false,doors=0,roof=true}={}){for(const w of car.userData.wheels){w.wheel.rotation.x=wheel;w.pivot.rotation.y=w.front?steer:0;}for(const d of car.userData.doors)d.group.rotation.y=d.side*doors;car.userData.roof.visible=roof;for(const m of car.userData.brakeMaterials)m.emissiveIntensity=brake?2.5:.45;car.userData.steering.rotation.z=-steer*2.7;}
+export function createExportModel(index,{color}={}){const car=createCar(index,{color});car.traverse(m=>{if(!m.isMesh)return;if(m.material.map){m.material=m.material.clone();m.material.map=null;m.material.color.set('#323b42');}const n=m.geometry.attributes.normal;for(let i=0;i<n.count;i++)if(Math.hypot(n.getX(i),n.getY(i),n.getZ(i))<.5)n.setXYZ(i,0,1,0);});return car;}
 
 
 

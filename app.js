@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {OrbitControls} from './vendor/addons/controls/OrbitControls.js';
 import {RoomEnvironment} from './vendor/addons/environments/RoomEnvironment.js';
 import {mergeGeometries} from './vendor/addons/utils/BufferGeometryUtils.js';
-import {CARS,createCar,animateCar} from './cars.js';
+import {CARS,createCar,animateCar,createExportModel} from './cars.js';
 import {newRun,stepRun,changeLane} from './game.js';
 import {createWorld} from './world.js';
 import {GLTFExporter} from './vendor/GLTFExporter.js';
@@ -35,7 +35,7 @@ function makeTraffic(index,color){const original=createCar(index,{color,lod:true
 const trafficPool=[];const trafficPaint=['#6989a1','#b9babb','#dfd5ba','#96584e','#343d43'];for(let i=0;i<7;i++){const car=makeTraffic(i%3,trafficPaint[i%5]);car.visible=false;scene.add(car);trafficPool.push(car);}
 
 function updateLabels(){const c=CARS[state.car];$('#car-brand').textContent=c.brand;$('#car-name').textContent=c.name;$('#car-year').textContent=c.year;$('#car-tag').textContent=c.tag;$('#spec-power').textContent=c.power;$('#spec-engine').textContent=c.engine;$('#spec-drive').textContent=c.drive==='AWD'?'ПОВНИЙ ПРИВІД':'ЗАДНІЙ ПРИВІД';$('#spec-weight').textContent=c.weight;$$('[data-car]').forEach(b=>{const on=Number(b.dataset.car)===state.car;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',on)});$$('[data-paint]').forEach(b=>{const on=b.dataset.paint===state.paint;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',on)});}
-const exportButton=document.createElement('button');exportButton.id='export-model';exportButton.setAttribute('aria-label','Завантажити свою 3D-модель GLB');exportButton.innerHTML='<svg viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M5 17v4h14v-4"/></svg><span>3D-модель</span>';$('.view-tools').append(exportButton);exportButton.addEventListener('click',async()=>{exportButton.disabled=true;try{const original=createCar(state.car,{color:state.paint});const bytes=await new GLTFExporter().parseAsync(original,{binary:true});const url=URL.createObjectURL(new Blob([bytes],{type:'model/gltf-binary'})),a=document.createElement('a');a.href=url;a.download=`apex86-${CARS[state.car].id}.glb`;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);toast('Авторську модель збережено');}catch(e){console.error(e);toast('Не вдалося зберегти модель');}finally{exportButton.disabled=false;}});
+const exportButton=document.createElement('button');exportButton.id='export-model';exportButton.setAttribute('aria-label','Завантажити свою 3D-модель GLB');exportButton.innerHTML='<svg viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M5 17v4h14v-4"/></svg><span>3D-модель</span>';$('.view-tools').append(exportButton);exportButton.addEventListener('click',async()=>{exportButton.disabled=true;try{const original=createExportModel(state.car,{color:state.paint});const bytes=await new GLTFExporter().parseAsync(original,{binary:true});const url=URL.createObjectURL(new Blob([bytes],{type:'model/gltf-binary'})),a=document.createElement('a');a.href=url;a.download=`apex86-${CARS[state.car].id}.glb`;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);toast('Авторську модель збережено');}catch(e){console.error(e);toast('Не вдалося зберегти модель');}finally{exportButton.disabled=false;}});
 let cameraTween=null,insideYaw=0,insidePitch=-.035,interiorDrag=false,previousPointer={x:0,y:0},detailIndex=0;
 function moveCamera(position,target){cameraTween={position:position.clone(),target:target.clone()};}
 function exterior(){state.view='exterior';document.body.classList.remove('cockpit');orbit.enabled=true;orbit.minDistance=3;orbit.maxDistance=13;orbit.maxPolarAngle=Math.PI/2-.045;orbit.enableZoom=true;$('#exterior').classList.add('selected');$('#interior').classList.remove('selected');$('#detail').classList.remove('selected');moveCamera(mobile()?new THREE.Vector3(7,3.8,-9.5):new THREE.Vector3(5.5,2.75,-6.6),new THREE.Vector3(0,mobile()?.12:.65,0));$('#garage-hint').textContent='Потягни, щоб роздивитися. Коліщатко — наближення.';}
@@ -92,6 +92,7 @@ function frame(now){requestAnimationFrame(frame);const dt=Math.min((now-previous
  renderer.render(scene,camera);frameCount++;
 }
 renderer.render(scene,camera);$('#loader').hidden=true;requestAnimationFrame(frame);
+
 
 
 
