@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {OrbitControls} from './vendor/addons/controls/OrbitControls.js';
 import {RoomEnvironment} from './vendor/addons/environments/RoomEnvironment.js';
-import {mergeGeometries} from './vendor/addons/utils/BufferGeometryUtils.js';
+import {createTrafficModel as makeTraffic} from './traffic-model.js';
 import {CARS,createCar,animateCar,createExportModel} from './cars.js';
 import {newRun,stepRun,changeLane} from './game.js';
 import {createWorld} from './world.js';
@@ -17,13 +17,13 @@ const canvas=$('#scene');let renderer;try{renderer=new THREE.WebGLRenderer({canv
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.75));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 const scene=new THREE.Scene();scene.background=new THREE.Color('#12171c');const camera=new THREE.PerspectiveCamera(38,innerWidth/innerHeight,.03,2100);camera.position.set(5.5,2.75,-6.6);
 const orbit=new OrbitControls(camera,canvas);orbit.target.set(0,.65,0);orbit.enableDamping=true;orbit.dampingFactor=.07;orbit.enablePan=false;orbit.minDistance=3;orbit.maxDistance=10;orbit.maxPolarAngle=Math.PI/2-.045;orbit.minPolarAngle=.17;orbit.rotateSpeed=.6;orbit.update();
-const pmrem=new THREE.PMREMGenerator(renderer),environment=pmrem.fromScene(new RoomEnvironment(),.04);scene.environment=environment.texture;scene.environmentIntensity=.65;pmrem.dispose();
+const pmrem=new THREE.PMREMGenerator(renderer),environment=pmrem.fromScene(new RoomEnvironment(),.11);scene.environment=environment.texture;scene.environmentIntensity=.65;pmrem.dispose();
 const garage=new THREE.Group();scene.add(garage);const garageLights=new THREE.Group();scene.add(garageLights);
 const hemi=new THREE.HemisphereLight('#d6e6ee','#282321',1.4);garageLights.add(hemi);
 const key=new THREE.SpotLight('#fff0dc',100,30,.7,.8,1.7);key.position.set(2,7,-3);key.target.position.set(0,0,0);key.castShadow=true;key.shadow.mapSize.set(2048,2048);key.shadow.bias=-.00015;key.shadow.normalBias=.025;key.shadow.blurSamples=12;garageLights.add(key,key.target);
 const fill=new THREE.DirectionalLight('#8eb8dc',1.3);fill.position.set(-5,3,2);garageLights.add(fill);const rim=new THREE.DirectionalLight('#fff2d9',1.1);rim.position.set(3,2,5);garageLights.add(rim);
-const floorMat=new THREE.MeshStandardMaterial({color:'#282e33',roughness:.73,metalness:.17});const floor=new THREE.Mesh(new THREE.PlaneGeometry(100,100),floorMat);floor.rotation.x=-Math.PI/2;floor.position.y=-.025;floor.receiveShadow=true;garage.add(floor);
-const lines=new THREE.GridHelper(50,25,'#353d43','#30373d');lines.position.y=-.018;lines.material.transparent=true;lines.material.opacity=.48;garage.add(lines);
+const floorMat=new THREE.MeshStandardMaterial({color:'#171c20',roughness:.56,metalness:.22});const floor=new THREE.Mesh(new THREE.PlaneGeometry(100,100),floorMat);floor.rotation.x=-Math.PI/2;floor.position.y=-.025;floor.receiveShadow=true;garage.add(floor);
+const lines=new THREE.GridHelper(50,25,'#353d43','#30373d');lines.position.y=-.018;lines.material.transparent=true;lines.material.opacity=.055;garage.add(lines);
 const wallMat=new THREE.MeshStandardMaterial({color:'#1c232a',roughness:.9});function roomBox(p,s,mat=wallMat){const m=new THREE.Mesh(new THREE.BoxGeometry(...s),mat);m.position.set(...p);garage.add(m);return m;}
 roomBox([0,3,9],[40,6,.2]);roomBox([-10,3,0],[.2,6,40]);roomBox([10,3,0],[.2,6,40]);const stripMat=new THREE.MeshBasicMaterial({color:'#cfdfdf'});for(const x of [-6,6]){roomBox([x,5,-1],[.14,.03,12],stripMat);}roomBox([0,5,8.86],[12,.035,.03],new THREE.MeshBasicMaterial({color:'#a7805e'}));
 const world=createWorld();world.group.visible=false;scene.add(world.group);const roadLights=new THREE.Group();roadLights.visible=false;scene.add(roadLights);roadLights.add(new THREE.HemisphereLight('#d4e6f3','#70715f',2.2));const sun=new THREE.DirectionalLight('#ffddac',3.1);sun.position.set(-65,75,-120);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-25,right:25,top:25,bottom:-25,near:.5,far:250});sun.shadow.bias=-.0003;sun.shadow.normalBias=.06;roadLights.add(sun,sun.target);sun.target.position.set(0,0,-12);
@@ -31,7 +31,6 @@ const world=createWorld();world.group.visible=false;scene.add(world.group);const
 const galleryCars=CARS.map((c,i)=>{const car=createCar(i,{color:i===state.car?state.paint:c.color});car.visible=i===state.car;garage.add(car);return car;});let selected=galleryCars[state.car];
 const player=createCar(0);player.visible=false;scene.add(player);let playerCar=player;const playerCache=new Map([[0,player]]);
 // Traffic keeps sculpted geometry but batches static parts into a few draw calls.
-function makeTraffic(index,color){const original=createCar(index,{color,lod:true});original.updateMatrixWorld(true);const byMaterial=new Map();original.traverse(m=>{if(!m.isMesh||m.material.transparent)return;const key=m.material.uuid;if(!byMaterial.has(key))byMaterial.set(key,{mat:m.material,geos:[]});let g=m.geometry.clone().applyMatrix4(m.matrixWorld);if(g.index){const unindexed=g.toNonIndexed();g.dispose();g=unindexed;}byMaterial.get(key).geos.push(g);});const group=new THREE.Group();for(const {mat,geos} of byMaterial.values()){const merged=mergeGeometries(geos,false);if(merged){const m=new THREE.Mesh(merged,mat);m.castShadow=true;m.receiveShadow=true;group.add(m);}geos.forEach(g=>g.dispose());}return group;}
 const trafficPool=[];const trafficPaint=['#6989a1','#b9babb','#dfd5ba','#96584e','#343d43'];for(let i=0;i<7;i++){const car=makeTraffic(i%3,trafficPaint[i%5]);car.visible=false;scene.add(car);trafficPool.push(car);}
 
 function updateLabels(){const c=CARS[state.car];$('#car-brand').textContent=c.brand;$('#car-name').textContent=c.name;$('#car-year').textContent=c.year;$('#car-tag').textContent=c.tag;$('#spec-power').textContent=c.power;$('#spec-engine').textContent=c.engine;$('#spec-drive').textContent=c.drive==='AWD'?'ПОВНИЙ ПРИВІД':'ЗАДНІЙ ПРИВІД';$('#spec-weight').textContent=c.weight;$$('[data-car]').forEach(b=>{const on=Number(b.dataset.car)===state.car;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',on)});$$('[data-paint]').forEach(b=>{const on=b.dataset.paint===state.paint;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',on)});}
