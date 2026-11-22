@@ -1,0 +1,6 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {registerHooks} from 'node:module';registerHooks({resolve(specifier,context,nextResolve){return specifier==='three'?{url:new URL('./vendor/three.module.js',import.meta.url).href,shortCircuit:true}:nextResolve(specifier,context);}});
+globalThis.document={createElement:()=>({width:512,height:128,getContext:()=>({fillRect(){},fillText(){}})})};
+const {createCar,animateCar}=await import('./cars.js');
+test('all three authored cars have finite geometry, complete roofs and moving doors',()=>{for(let i=0;i<3;i++){const car=createCar(i);let meshes=0;car.traverse(m=>{if(!m.isMesh)return;meshes++;const p=m.geometry.attributes.position;for(let j=0;j<p.array.length;j++)assert.ok(Number.isFinite(p.array[j]),`${i}: ${m.name} contains non-finite vertex ${j}`);});assert.ok(meshes>100);assert.equal(car.userData.wheels.length,4);assert.equal(car.userData.doors.length,2);animateCar(car,{roof:true,doors:1});assert.equal(car.userData.roof.visible,true);assert.ok(car.userData.doors[0].group.rotation.y!==0);}});
+test('opening doors swings them outwards, away from the cockpit',()=>{const car=createCar(0);animateCar(car,{doors:1});for(const door of car.userData.doors)assert.equal(Math.sign(door.group.rotation.y),door.side);});
